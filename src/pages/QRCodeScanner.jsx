@@ -1,44 +1,64 @@
-import { useEffect } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
+import { useEffect, useRef, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 function QRCodeScanner({ onScanSuccess }) {
+  const scannerRef = useRef(null);
+  const [isScanning, setIsScanning] = useState(false);
+
   useEffect(() => {
-  const html5QrCode = new Html5Qrcode("reader")
-  let isMounted = true
+    const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
 
-  Html5Qrcode.getCameras().then(devices => {
-    if (!isMounted) return
+    Html5Qrcode.getCameras()
+      .then((devices) => {
+        if (devices.length === 0) {
+          console.warn("Nenhuma câmera encontrada.");
+          return;
+        }
 
-    if (devices && devices.length) {
-      const cameraId = devices[0].id
+        const cameraId = devices[0].id;
 
-      html5QrCode.start(
-        cameraId,
-        {
-          fps: 10,
-          qrbox: 250,
-        },
-        (decodedText) => {
-          console.log("QR Code escaneado:", decodedText)
-          html5QrCode.stop()
-          alert("QR Code lido: " + decodedText)
-          // onScanSuccess?.(decodedText) <- chame aqui se for usar
-        },
-        (errorMessage) => {}
-      ).catch(err => {
-        console.error("Erro ao iniciar leitura:", err)
+        html5QrCode
+          .start(
+            cameraId,
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+              if (!isScanning) return;
+
+              setIsScanning(false); // evitar múltiplas leituras
+              alert("QR Code lido: " + decodedText);
+              if (onScanSuccess) onScanSuccess(decodedText);
+
+              html5QrCode
+                .stop()
+                .then(() => console.log("Scanner parado."))
+                .catch((err) => console.error("Erro ao parar scanner:", err));
+            },
+            (err) => {
+              // Erros de leitura são normais
+              console.warn("Erro de leitura:", err);
+            }
+          )
+          .then(() => {
+            setIsScanning(true);
+          })
+          .catch((err) => {
+            console.error("Erro ao iniciar scanner:", err);
+          });
       })
-    }
-  }).catch(err => {
-    console.error("Erro ao acessar câmera:", err)
-  })
+      .catch((err) => {
+        console.error("Erro ao acessar câmera:", err);
+      });
 
-  return () => {
-    isMounted = false
-    html5QrCode.stop().catch(() => {})
-  }
-}, [])
-
+    return () => {
+      if (scannerRef.current && isScanning) {
+        scannerRef.current
+          .stop()
+          .then(() => console.log("Scanner parado ao desmontar."))
+          .catch((err) => console.warn("Erro ao parar scanner ao desmontar:", err));
+      }
+    };
+  }, [onScanSuccess, isScanning]);
 
   return (
     <div>
@@ -54,7 +74,7 @@ function QRCodeScanner({ onScanSuccess }) {
         }}
       ></div>
     </div>
-  )
+  );
 }
 
-export default QRCodeScanner
+export default QRCodeScanner;
